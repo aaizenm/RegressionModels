@@ -1,0 +1,183 @@
+---
+title: 'Regression Model: Miles per Gallon (Automatic or Manual transmission?)'
+author: "Abraham Aizenman"
+date: "Tuesday, September 09, 2014"
+output: html_document
+---
+## Executive Summary
+We analyzed the miles per gallon of Manual vs. Automatic transmissions. 
+We found the answer is yes: Cars with a manual transmission are better for mpg than cars with an automatic transmission.
+
+We notice that there are other reasons that affect as well the mpg, as the weight and the horsepower. 
+
+
+
+### Context
+You work for Motor Trend magazine. Looking at a data set of a collection of cars, they are interested in exploring the relationship between a set of variables and MPG (outcome). The are particurlarly interested in the questions: 
+
+- "Is an automatic or manual transmission better for MPG"
+- "How different is the MPG between automatic manual transmission?"
+
+
+### Data Set to Analyze
+Take the `mtcars` data set, which is from the 1974 Motor Trend US magazine (1973-74 models).
+For this purpose the best model is found based on the eliminating the least significant variables from the model and choosing a model with highest adjusted R^2. 
+(R^2 is the coefficient of determination, a number that indicates how well data fit a statistical model, the square of the sample correlation coefficient between the outcomes and their predicted values.)
+
+The data set contains thirty-two vehicles, including information about engine volume (disp), horsepower (hp), number of cylinders (cyl), weight (wt), (drat) rear axle ratio, (carb) number of carburetors, and obviously the milage per gallon (mpg) and a binary variable determining whether the vehicle is an automatic or manual transmission (am) (0 = automatic, 1 = manual).
+
+### Step 1: Explore the dataset.
+
+```{r echo=TRUE, eval=TRUE}
+library(datasets)
+library(corrplot)
+library(knitr)
+library(gridExtra)
+library(ggplot2)
+data(mtcars)
+head(mtcars)
+```
+
+Here some Figures that explain the content of the data.
+
+```{r echo=FALSE, eval=TRUE}
+qplot(hp, mpg,data=mtcars, color=factor(am)) + geom_point(aes(size=cyl,shape = factor(cyl))) + geom_smooth(method=lm,span = 0.1) + ggtitle("Figure 1: MPG vs. HP by Automatic=0 vs Manual=1 and Cylinders") +  theme(plot.title = element_text(lineheight=.8, face="bold")) + xlab("Horsepower") + ylab("Millage Per Gallon")
+qplot(wt, mpg,data=mtcars, color=factor(am)) + geom_point(aes(size=gear,shape = factor(gear))) + geom_smooth(method=lm,span = 0.1) + ggtitle("Figure 2: MPG vs. Weight by Automatic=0 vs Manual=1 and Gear") +  theme(plot.title = element_text(lineheight=.8, face="bold")) + xlab("Weigth (lb/1000)") + ylab("Millage Per Gallon")
+```
+
+#####Note: 
+in Figure 2 that in our dataset, automatic cars have lower weight than manual cars.
+
+### Step 2:  Data Transformation
+we transform certain variables as a factor: (am, cyl, vs, gear).
+
+```{r echo=TRUE, eval=TRUE}
+mtcars$cyl <- factor(mtcars$cyl)
+mtcars$vs <- factor(mtcars$vs)
+mtcars$gear <- factor(mtcars$gear)
+mtcars$carb <- factor(mtcars$carb)
+mtcars$am <- factor(mtcars$am, labels = c("Automatic", "Manual"))
+```
+
+A boxplot comparing the miles per gallon (mpg) by transmission type is in Figure 5 at the Appendix. We can clearly see a difference between the two, also show by average mpg:
+
+```{r echo=TRUE, eval=TRUE}
+aggregate(mpg ~ am, data = mtcars, mean)
+```
+
+It looks like the Manual transmissions seem to get better gas mileage, but can we pin point if it is really the transmission type or some other variable?
+
+### Step 3: Exploratory Data Analysis
+#### Understanding the Correlations between the variables
+
+
+```{r echo=TRUE, eval=TRUE}
+col <- colorRampPalette(c("red", "white", "blue"))
+set.seed(135)
+correlCars<-cor(as.data.frame(mtcars))
+```
+
+### Figure 3: Correlation Matrix
+```{r echo=TRUE, eval=TRUE}
+corrplot.mixed(correlCars, order = "alphabet",  lower="number", upper="color", tl.cex = 1.3,  tl.col = rgb(0, 0, 0),col = col(20))
+```
+
+This correlation plot shows the correlation between pairs of the predictors in our dataset. 
+we can observe that there is a significant correlation between mpg and the other variables of interest like cyl, disp, hp, draft, wt, vs and am.
+
+In addition and as we mentioned before we are also interested in exploring the relation between the mpg and its effects of car transmission type, (Figure 5).
+
+### Step 4: Regression Analysis
+We build different linear regression models based on the variables we preprocessed above and will try to find out the best model and compare it with the base model using anova. 
+
+After model selection, we also perform analysis of residuals.
+
+##### Lets begin with a simple linear model based on transmission type (am) and miles per gallon (mpg):
+```{r echo=TRUE}
+set.seed(955)
+fit <- lm(mpg ~ am,data=mtcars)
+summary(fit)
+```
+
+Based on the results of this model it appears am transmission types is significant with a p-value < .05, but the R2 implies the model only explains 36% of the variance. 
+Now, we will try to do much better. 
+
+##### Now lets try with the complete linear model based on all variables vs miles per gallon (mpg):
+
+```{r echo=TRUE}
+fit1 <- lm(mpg ~ .,data=mtcars)
+```
+
+Now we still have a p-value < .05 and the R2 explains 89% of the variance.
+
+Now I will run a model with the most correlated variables explosed in Figure 3.
+
+```{r echo=TRUE}
+fit2 <- lm(mpg ~ cyl + hp + wt + am ,data=mtcars)
+summary(fit2)$coef
+```
+
+Looking to the coefficients we see that variables cyl, hp, wt and am are the best predictors of mpg. A Manual transmission vehicle should expect to get 1.8092 better mpg. Each increase of 1000lb of weight (wt) would expect to decrease the mpg experienced by 2.4968 miles. Cars with higher horsepower (hp) and 6 and 8 cylinder vehicles should perform worse than cars with lower horsepower and 4 cylinder vehicles.
+
+Now I will fit 2 more models:
+
+```{r echo=TRUE}
+fit3 <- lm(mpg ~  hp + wt + am ,data=mtcars)
+summary(fit3)$coef
+fit4 <- lm(mpg ~  hp + wt  ,data=mtcars)
+```
+
+We can see that the best (smaller) p-value comes from model fit3.
+
+## Step 5: Model Diagnostics
+
+### Analysis of variances
+Using Anova (Analysis of variances) for different models.
+
+```{r echo=TRUE}
+anova(fit1, fit2, fit3, fit4)
+```
+Note that the smaller values for the p-value in the anova above indicates that the confounding variables cyl, wt and hp are statistically insignificant; and we reject the hypothesis that these variables do not contribute to the accuracy of our model.
+
+```{r echo=TRUE}
+sumCoef<-summary(fit3)$coef
+sumCoef[4,1] + c(-1, 1) * qt(.975, df = fit$df) * sumCoef[4, 2]
+```
+
+##### mpg = 34.0028 - 0.03747 * hp -2.87857 * wt + 2.08371 * amManual
+
+### Inference
+We will conduct the t-test for mpg as the outcome and am as predictor, we clearly see that the manual and automatic transmissions are significatively different.
+```{r echo=TRUE}
+t.test(mpg ~ am, data = mtcars)$statistic
+```
+
+### Residuals Analysis
+We can check diagnostics by examining the Normal QQ plot, the residuals against the fitted values (to check for normality), Scale-Location and Residuals vs. Leverage
+
+### Figure 4
+
+```{r echo=TRUE}
+layout(matrix(c(1,2,3,4),2,2))
+plot(fit3)
+```
+
+## Step 6: Conclusions
+
+- Cars with a manual transmission are better for mpg than cars with an automatic transmission.
+
+- There is some relationship between weight and am, and weight may be confounding the consuming of mpg. (See Figure 6).
+
+- With 95% confidence the rate of change of the conditional mean mpg with respect to am is from -0.7273 to  4.8947 mpg. 
+mpg increases with respect to having a manual transmission (by 2.08), given the same weight and hp.
+
+## Appendix
+
+### Figures 5 and 6
+```{r echo=FALSE, eval=TRUE}
+p1<-ggplot(aes(x=factor(am), y=mpg),data=mtcars)+ geom_boxplot(aes(fill = factor(am), color = factor(am),alpha=0.3)) + ggtitle("Figure 5: MPG for Automatic/Manual transmission") +  theme(plot.title = element_text(lineheight=.8, face="bold")) + xlab("Automatic=0 vs Manual=1   Transmission") + ylab("Millage Per Gallon")
+p2<-ggplot(aes(x=factor(am), y=wt),data=mtcars)+ geom_boxplot(aes(fill = factor(am), color = factor(am),alpha=0.3)) + ggtitle("Figure 6: Weigth for Automatic/Manual transmission") +  theme(plot.title = element_text(lineheight=.8, face="bold")) + xlab("Automatic vs Manual  Transmission") + ylab("Weigth ((lb/1000))")
+grid.arrange(arrangeGrob(arrangeGrob(p1,p2),ncol=2, widths=unit(1, "npc"), just="left"))
+```
+
+ 
